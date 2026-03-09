@@ -1,3 +1,4 @@
+
 # FreshChef
 
 FreshChef is a Flask web app that turns whatever's left in your fridge into actual meals. Snap a photo of your ingredients, type a few things in, or pull from your saved pantry — and the app figures out what you can cook. The idea came from a simple frustration: opening the fridge, having no idea what to make, and ending up ordering takeout instead.
@@ -131,3 +132,4 @@ A few things that would make this genuinely more useful:
 - **Meal planner** — pick recipes for the week and auto-generate a shopping list
 - **Expiry tracking** — flag ingredients that are running low or about to go off
 - **Better fridge detection** — improve accuracy for cluttered or partially visible items
+
