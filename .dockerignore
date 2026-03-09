@@ -1,0 +1,50 @@
+# ── Version control ───────────────────────────────────────────────────────────
+.git
+.gitignore
+
+# ── Python cache ──────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Local secrets — NEVER bake into the image ─────────────────────────────────
+.env
+*.env
+
+# ── Runtime data (mounted as Docker volumes instead) ─────────────────────────
+instance/
+uploads/
+
+# ── OS noise ──────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Editor config ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Test & CI artefacts ───────────────────────────────────────────────────────
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# ── Docker files themselves (no need to copy into image) ──────────────────────
+Dockerfile*
+docker-compose*.yml
+
+# ── ML models (mounted as a volume, never baked into the image) ───────────────
+models/

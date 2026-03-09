@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page" id="recipesPage">
+
+  <!-- Header -->
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;flex-wrap:wrap;gap:12px;animation:fu .38s ease;">
+    <div>
+      <h1 style="font-size:clamp(24px,3.5vw,34px);margin-bottom:4px;">Recipes</h1>
+      <p style="color:var(--mu);font-size:13.5px;">
+        <span id="recipeCountLabel">{{ recipes|length }} recipe{{ 's' if recipes|length != 1 else '' }}</span>
+        <span style="color:var(--ac);font-weight:600;" id="pageLabel"></span>
+      </p>
+    </div>
+    <a class="btn btn-g btn-s" href="{{ url_for('main.app_home') }}" style="font-size:13px;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M11 18L5 12L11 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Generate more
+    </a>
+  </div>
+
+  <!-- Grid -->
+  <div id="recipesGrid" class="rgrid" style="margin-bottom:28px;"></div>
+
+  <!-- Empty state -->
+  <div id="emptyRecipes" class="card" style="padding:48px 24px;text-align:center;"{% if recipes %} hidden{% endif %}>
+    <div style="font-size:36px;margin-bottom:12px;">&#127869;</div>
+    <div style="font-size:18px;font-family:'Instrument Serif',serif;margin-bottom:6px;">No recipes yet</div>
+    <div style="color:var(--mu);font-size:13.5px;margin-bottom:20px;">Go to the app and generate recipes from your fridge or ingredients.</div>
+    <a class="btn btn-p" href="{{ url_for('main.app_home') }}" style="font-size:13.5px;">Start cooking</a>
+  </div>
+
+  <!-- Pagination — arrow style -->
+  <div id="paginationRow" hidden style="display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:8px;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button id="prevPageBtn" disabled style="width:38px;height:38px;border-radius:10px;border:1px solid var(--bd2);background:var(--sur);color:var(--tx);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M11 18L5 12L11 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div id="pageNumbers" style="display:flex;gap:5px;"></div>
+      <button id="nextPageBtn" style="width:38px;height:38px;border-radius:10px;border:1px solid var(--bd2);background:var(--sur);color:var(--tx);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 12H19M13 6L19 12L13 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+    <p id="showingLabel" style="text-align:center;font-size:11.5px;color:var(--mu);"></p>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="application/json" id="recipesData">{{ recipes|tojson }}</script>
+<script>
+(function() {
+  var raw = document.getElementById('recipesData');
+  var allRecipes = raw ? JSON.parse(raw.textContent) : [];
+
+  // Always sort by match score descending
+  allRecipes.sort(function(a, b) { return ((b.match_score || 0)) - ((a.match_score || 0)); });
+
+  var PER_PAGE = 9;
+  var page = 0;
+  var totalPages = Math.ceil(allRecipes.length / PER_PAGE);
+
+  function recipeImageUrl(r, idx) {
+    var primary = (r && (r.image_url || r.image)) || '';
+    if (primary) return primary;
+    var title = (r && r.title) || 'food';
+    var ings  = Array.isArray(r && r.ingredients) ? r.ingredients.slice(0, 3).join(' ') : '';
+    var query = encodeURIComponent((title + ' ' + ings).trim() || 'food');
+    var sig   = (r && r.id) != null ? String(r.id) : String(idx);
+    return 'https://source.unsplash.com/900x700/?' + query + '&sig=' + sig;
+  }
+
+  // imgMap: { recipeId -> <img> element } populated during render(), read by poller
+  var imgMap = {};
+  var _pollTimer = null;
+
+  function pollForImages() {
+    var interval = 1500;
+    var maxTries = 20;
+
+    // Build pending map for recipes that don't have a real image yet
+    var pending = {};
+    allRecipes.forEach(function(r) {
+      if (r.id && !(r.image_url || r.image) && imgMap[r.id]) {
+        pending[r.id] = 0;
+      }
+    });
+
+    if (!Object.keys(pending).length) return;
+
+    function tick() {
+      var ids = Object.keys(pending);
+      if (!ids.length) return;
+
+      var promises = ids.map(function(id) {
+        if (pending[id] >= maxTries) { delete pending[id]; return Promise.resolve(); }
+
+        return fetch('/api/recipes/image/' + encodeURIComponent(id))
+          .then(function(res) { return res.json().catch(function(){ return null; }); })
+          .then(function(data) {
+            if (!data) { pending[id]++; return; }
+
+            if (data.image) {
+              // Image is ready — swap src in-place and update recipe objects
+              var imgEl = imgMap[id];
+              if (imgEl) { imgEl.src = data.image; imgEl.dataset.fb = ''; }
+              allRecipes.forEach(function(r) {
+                if (r.id === id) { r.image = data.image; r.image_url = data.image; }
+              });
+              delete pending[id];
+            } else if (data.error) {
+              // Generation permanently failed — stop polling for this id
+              console.warn('[image] Generation failed for', id, ':', data.error);
+              delete pending[id];
+            } else {
+              // Still generating (202) — try again next tick
+              pending[id]++;
+            }
+          })
+          .catch(function() { pending[id]++; });
+      });
+
+      Promise.all(promises).then(function() {
+        if (Object.keys(pending).length > 0) {
+          _pollTimer = setTimeout(tick, interval);
+        }
+      });
+    }
+
+    if (_pollTimer) clearTimeout(_pollTimer);
+    _pollTimer = setTimeout(tick, interval);
+  }
+
+  function render() {
+    var grid  = document.getElementById('recipesGrid');
+    var empty = document.getElementById('emptyRecipes');
+    var pag   = document.getElementById('paginationRow');
+    grid.innerHTML = '';
+
+    if (!allRecipes.length) {
+      empty.removeAttribute('hidden');
+      pag.setAttribute('hidden', '');
+      return;
+    }
+
+    empty.setAttribute('hidden', '');
+    totalPages = Math.ceil(allRecipes.length / PER_PAGE);
+    var slice = allRecipes.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
+
+    // Reset imgMap for the current page's cards
+    imgMap = {};
+
+    document.getElementById('recipeCountLabel').textContent =
+      allRecipes.length + ' recipe' + (allRecipes.length !== 1 ? 's' : '') +
+      (totalPages > 1 ? ' \u00b7 sorted by match' : ' \u00b7 sorted by match');
+    document.getElementById('pageLabel').textContent = totalPages > 1 ? '  \u00b7  Page ' + (page + 1) + ' of ' + totalPages : '';
+
+    slice.forEach(function(r, i) {
+      var matchPct  = r.match_score || 0;
+      var diffClass = r.difficulty === 'Easy' ? 'bdg-a' : 'bdg-w';
+      var imgSrc    = recipeImageUrl(r, page * PER_PAGE + i);
+
+      var card = document.createElement('article');
+      card.className = 'rc';
+      card.style.animationDelay = (i * 0.045) + 's';
+
+      // Image wrapper
+      var imgWrap = document.createElement('div');
+      imgWrap.style.cssText = 'position:relative;overflow:hidden;';
+
+      var img = document.createElement('img');
+      img.className = 'rc-img';
+      img.src = imgSrc;
+      img.alt = r.title || '';
+      img.onerror = function() {
+        if (!this.dataset.fb) { this.dataset.fb = '1'; this.src = 'https://source.unsplash.com/900x700/?food&sig=' + i + '-fb'; }
+      };
+      // Register in imgMap so pollForImages can swap src when SD image is ready
+      if (r.id) imgMap[r.id] = img;
+      imgWrap.appendChild(img);
+
+      // Badges
+      var badges = document.createElement('div');
+      badges.style.cssText = 'position:absolute;top:9px;left:9px;display:flex;gap:5px;';
+      if (r.difficulty) {
+        var diffB = document.createElement('span');
+        diffB.className = 'bdg ' + diffClass;
+        diffB.textContent = r.difficulty;
+        badges.appendChild(diffB);
+      }
+      var matchB = document.createElement('span');
+      matchB.className = 'bdg bdg-n';
+      matchB.textContent = 'Match ' + matchPct + '%';
+      badges.appendChild(matchB);
+      imgWrap.appendChild(badges);
+
+      // Fav button
+      var favBtn = document.createElement('button');
+      favBtn.type = 'button';
+      favBtn.title = 'Save to favourites';
+      favBtn.style.cssText = 'position:absolute;top:8px;right:8px;width:32px;height:32px;border-radius:9px;background:rgba(0,0,0,.25);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.15);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .15s,background .15s;';
+      favBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 21C12 21 3.5 15.5 3.5 9A4.5 4.5 0 0 1 12 6.76 4.5 4.5 0 0 1 20.5 9C20.5 15.5 12 21 12 21Z" stroke="rgba(255,255,255,.85)" stroke-width="1.8" stroke-linejoin="round"/></svg>';
+      (function(recipe, btn) {
+        btn.addEventListener('click', function(e) {
+          e.preventDefault(); e.stopPropagation();
+          apiJson('/api/favorites', { method: 'POST', body: { recipe: recipe } })
+            .then(function() {
+              toast('Saved to favourites', 'success');
+              btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 21C12 21 3.5 15.5 3.5 9A4.5 4.5 0 0 1 12 6.76 4.5 4.5 0 0 1 20.5 9C20.5 15.5 12 21 12 21Z" fill="#F06060" stroke="#F06060" stroke-width="1.8" stroke-linejoin="round"/></svg>';
+              btn.style.background = 'rgba(240,96,96,.18)';
+            })
+            .catch(function(err) { toast(err.message, 'error'); });
+        });
+      })(r, favBtn);
+      imgWrap.appendChild(favBtn);
+      card.appendChild(imgWrap);
+
+      // Body
+      var body = document.createElement('div');
+      body.style.padding = '15px';
+
+      var titleRow = document.createElement('div');
+      titleRow.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;gap:8px;';
+      var h3 = document.createElement('h3');
+      h3.style.cssText = "font-size:14.5px;font-family:'Instrument Serif',serif;line-height:1.22;flex:1;font-weight:400;";
+      h3.textContent = r.title || '';
+      var pctSpan = document.createElement('span');
+      pctSpan.style.cssText = 'font-size:13px;font-weight:600;color:var(--ac);flex-shrink:0;';
+      pctSpan.textContent = matchPct + '%';
+      titleRow.appendChild(h3);
+      titleRow.appendChild(pctSpan);
+      body.appendChild(titleRow);
+
+      var mbar = document.createElement('div');
+      mbar.className = 'mbar';
+      mbar.style.marginBottom = '9px';
+      var mf = document.createElement('div');
+      mf.className = 'mbar-f';
+      mf.style.width = matchPct + '%';
+      mbar.appendChild(mf);
+      body.appendChild(mbar);
+
+      if (r.description) {
+        var desc = document.createElement('p');
+        desc.style.cssText = 'font-size:12px;color:var(--tx2);line-height:1.6;margin-bottom:12px;';
+        desc.textContent = r.description;
+        body.appendChild(desc);
+      }
+
+      var meta = document.createElement('div');
+      meta.style.cssText = 'display:flex;gap:11px;font-size:12px;color:var(--mu);margin-bottom:13px;';
+      if (r.cooking_time) {
+        var t = document.createElement('span'); t.textContent = '\u23F1 ' + r.cooking_time; meta.appendChild(t);
+      }
+      if (r.servings) {
+        var s = document.createElement('span'); s.textContent = '\uD83C\uDF7D ' + r.servings + ' serves'; meta.appendChild(s);
+      }
+      body.appendChild(meta);
+
+      var link = document.createElement('a');
+      link.className = 'btn btn-o';
+      link.href = '/recipe/' + encodeURIComponent(r.id);
+      link.style.cssText = 'width:100%;font-size:12.5px;border-radius:8px;';
+      link.innerHTML = 'View Recipe <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M5 12H19M13 6L19 12L13 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      body.appendChild(link);
+
+      card.appendChild(body);
+      grid.appendChild(card);
+    });
+
+    // Kick off polling for any cards still awaiting their SD-generated image
+    pollForImages();
+
+    // Pagination
+    renderPagination();
+  }
+
+  function renderPagination() {
+    var pag = document.getElementById('paginationRow');
+    if (totalPages <= 1) { pag.setAttribute('hidden', ''); return; }
+
+    pag.removeAttribute('hidden');
+    pag.style.display = 'flex';
+
+    var nums = document.getElementById('pageNumbers');
+    nums.innerHTML = '';
+
+    // Show max 7 page buttons with ellipsis logic
+    var pages = [];
+    if (totalPages <= 7) {
+      for (var i = 0; i < totalPages; i++) pages.push(i);
+    } else {
+      pages = [0];
+      if (page > 2) pages.push('...');
+      for (var j = Math.max(1, page - 1); j <= Math.min(totalPages - 2, page + 1); j++) pages.push(j);
+      if (page < totalPages - 3) pages.push('...');
+      pages.push(totalPages - 1);
+    }
+
+    pages.forEach(function(p) {
+      if (p === '...') {
+        var el = document.createElement('span');
+        el.style.cssText = 'width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--mu);';
+        el.textContent = '\u2026';
+        nums.appendChild(el);
+      } else {
+        var b = document.createElement('button');
+        b.style.cssText = 'width:32px;height:32px;border-radius:9px;border:1px solid;cursor:pointer;font-weight:600;font-size:12.5px;transition:all .15s;'
+          + 'border-color:' + (p === page ? 'var(--ac)' : 'var(--bd2)') + ';'
+          + 'background:' + (p === page ? 'var(--ac)' : 'transparent') + ';'
+          + 'color:' + (p === page ? 'var(--acTx)' : 'var(--mu)') + ';';
+        b.textContent = p + 1;
+        (function(pi) {
+          b.addEventListener('click', function() { page = pi; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+        })(p);
+        nums.appendChild(b);
+      }
+    });
+
+    document.getElementById('prevPageBtn').disabled = page === 0;
+    document.getElementById('nextPageBtn').disabled = page === totalPages - 1;
+    document.getElementById('showingLabel').textContent =
+      'Showing ' + (page * PER_PAGE + 1) + '\u2013' + Math.min((page + 1) * PER_PAGE, allRecipes.length) + ' of ' + allRecipes.length + ' recipes';
+  }
+
+  document.getElementById('prevPageBtn').addEventListener('click', function() {
+    if (page > 0) { page--; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  });
+  document.getElementById('nextPageBtn').addEventListener('click', function() {
+    if (page < totalPages - 1) { page++; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  });
+
+  render();
+})();
+</script>
+{% endblock %}

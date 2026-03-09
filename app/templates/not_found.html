@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page" style="display:flex;align-items:center;justify-content:center;min-height:60vh;">
+  <div class="card" style="padding:48px 32px;text-align:center;max-width:440px;margin:0 auto;animation:si .38s ease;">
+    <div style="font-size:48px;margin-bottom:16px;">🍽️</div>
+    <h1 style="font-size:22px;margin-bottom:8px;">{{ title or "Not found" }}</h1>
+    <p style="color:var(--mu);font-size:13.5px;margin-bottom:28px;line-height:1.7;">
+      That page or recipe doesn't exist (or your session expired).
+    </p>
+    <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;">
+      <a class="btn btn-p" href="{{ url_for('main.app_home') }}" style="font-size:13.5px;">Go to app</a>
+      <a class="btn btn-o" href="{{ url_for('recipes.recipes_page') }}" style="font-size:13.5px;">Recipes</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

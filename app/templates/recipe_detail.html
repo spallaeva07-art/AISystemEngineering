@@ -1,0 +1,724 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page" id="detailPage">
+
+  <!-- Back -->
+  <button class="btn btn-g btn-s" style="margin-bottom:20px;" onclick="history.back()">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M11 18L5 12L11 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Recipes
+  </button>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       FIX 3 — LAYOUT ORDER:
+         1. Recipe title  (in hero banner)
+         2. Description   (immediately below hero)
+         3. Ingredients   (checklist card)
+         4. Step navigator (interactive step-by-step with prev/next)
+         5. Additional metadata (tips, substitutions, quick-info sidebar)
+       ═══════════════════════════════════════════════════════════ -->
+
+  <!-- 1. Hero banner (title lives here) -->
+  <div style="border-radius:14px;overflow:hidden;height:280px;background:linear-gradient(140deg,rgba(26,101,64,.35),rgba(26,101,64,.08));display:flex;align-items:center;justify-content:center;position:relative;margin-bottom:24px;border:1px solid var(--bd);">
+    <img id="heroImg"
+      src="{{ (recipe.image_url or recipe.image or '') }}"
+      alt="{{ recipe.title }}"
+      data-title="{{ recipe.title }}"
+      style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;"
+      onerror="handleHeroError(this)"
+    />
+    <div style="position:absolute;inset:0;background:linear-gradient(transparent 40%,rgba(0,0,0,.6));"></div>
+    <div style="position:absolute;bottom:0;left:0;right:0;padding:18px 22px;">
+      <h1 style="font-family:'Instrument Serif',serif;font-size:clamp(20px,3vw,32px);font-weight:400;color:#fff;margin-bottom:8px;letter-spacing:-.02em;">{{ recipe.title }}</h1>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <span class="bdg" style="background:rgba(255,255,255,.13);color:#fff;backdrop-filter:blur(8px);">&#9201; {{ recipe.cooking_time }}</span>
+        <span class="bdg" style="background:rgba(255,255,255,.13);color:#fff;backdrop-filter:blur(8px);">&#127869; {{ recipe.servings }} serves</span>
+        <span class="bdg {% if recipe.difficulty == 'Easy' %}bdg-a{% else %}bdg-w{% endif %}">{{ recipe.difficulty }}</span>
+        {% if recipe.match_score is not none %}
+          <span class="bdg bdg-a">&#10003; {{ recipe.match_score }}% match</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <script>
+  function handleHeroError(img) {
+    if (img.dataset.fb === '2') {
+      img.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='400' viewBox='0 0 900 400'%3E%3Crect width='900' height='400' fill='%23f0f0f0'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='24' fill='%23999'%3EFood%3C/text%3E%3C/svg%3E";
+      return;
+    }
+    var attempt = parseInt(img.dataset.fb || '0');
+    var title = img.dataset.title || 'food';
+    if (attempt === 0) {
+      img.src = 'https://source.unsplash.com/featured/900x400/?' + encodeURIComponent(title) + '&t=' + Date.now();
+      img.dataset.fb = '1';
+    } else {
+      img.src = 'https://source.unsplash.com/featured/900x400/?food&t=' + Date.now();
+      img.dataset.fb = '2';
+    }
+  }
+  </script>
+
+  <!-- Action row -->
+  <div style="display:flex;gap:9px;margin-bottom:24px;flex-wrap:wrap;">
+    <button class="btn btn-p" style="font-size:13.5px;padding:11px 24px;" id="startCookingBtn">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M6 4.5L20 12L6 19.5V4.5Z" fill="var(--acTx)" stroke="var(--acTx)" stroke-width="1.5" stroke-linejoin="round"/></svg>
+      Start Cooking Mode
+    </button>
+    <button class="btn btn-o" style="font-size:13.5px;padding:11px 18px;" id="favBtn">
+      <svg id="favIconHeart" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 21C12 21 3.5 15.5 3.5 9A4.5 4.5 0 0 1 12 6.76 4.5 4.5 0 0 1 20.5 9C20.5 15.5 12 21 12 21Z" stroke="var(--mu)" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <span id="favBtnLabel">Save</span>
+    </button>
+  </div>
+
+  <!-- Shared utility styles -->
+  <style>
+    .step-row           { display:flex; gap:13px; padding:13px 0; }
+    .step-row.sep       { border-bottom:1px solid var(--bd); }
+    .tip-row            { display:flex; gap:8px; font-size:12.5px; color:var(--tx2); line-height:1.6; padding:6px 0; }
+    .tip-row.sep        { border-bottom:1px solid var(--bd); }
+    .info-row           { display:flex; justify-content:space-between; padding:7px 0; font-size:13px; }
+    .info-row.sep       { border-bottom:1px solid var(--bd); }
+
+    /* ── FIX 3: Step navigator styles ──────────────────────────── */
+    .snav-wrap {
+      background:var(--sur);border:1px solid var(--bd);border-radius:14px;padding:22px;
+    }
+    .snav-header {
+      display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;
+    }
+    .snav-progress-bar {
+      height:4px;border-radius:99px;background:var(--sur2);border:1px solid var(--bd);overflow:hidden;margin-bottom:18px;
+    }
+    .snav-progress-fill {
+      height:100%;background:var(--ac);border-radius:99px;transition:width .3s ease;
+    }
+    .snav-step-num {
+      width:34px;height:34px;border-radius:10px;background:var(--acBg);border:1.5px solid var(--ac);
+      display:flex;align-items:center;justify-content:center;flex-shrink:0;
+      font-size:13px;font-weight:700;color:var(--ac);margin-top:2px;
+    }
+    .snav-step-text {
+      font-size:14px;color:var(--tx2);line-height:1.7;flex:1;
+    }
+    .snav-dots {
+      display:flex;gap:6px;flex-wrap:wrap;margin-top:16px;
+    }
+    .snav-dot {
+      height:6px;border-radius:99px;border:none;cursor:pointer;
+      transition:all .25s;background:var(--bd2);
+    }
+    .snav-dot.active { background:var(--ac);width:20px; }
+    .snav-dot.done   { background:var(--ac);opacity:.5; }
+    .snav-controls {
+      display:flex;align-items:center;justify-content:space-between;margin-top:20px;gap:10px;flex-wrap:wrap;
+    }
+  </style>
+
+  <!-- Main layout grid -->
+  <div class="dgrid">
+
+    <!-- LEFT column: description → ingredients → step navigator → tips -->
+    <div style="display:flex;flex-direction:column;gap:18px;">
+
+      <!-- 2. Description card (FIX 3: moved above ingredients) -->
+      {% if recipe.description %}
+      <div class="card" style="padding:20px;">
+        <div class="sl">About this Recipe</div>
+        <p style="font-size:13.5px;color:var(--tx2);line-height:1.75;margin-top:4px;">{{ recipe.description }}</p>
+      </div>
+      {% endif %}
+
+      <!-- 3. Ingredients checklist (FIX 3: placed second, before steps) -->
+      <div class="card" style="padding:20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+          <div class="sl" style="margin-bottom:0;">Ingredients</div>
+          <span style="font-size:11.5px;color:var(--mu);">{{ recipe.ingredients|length }} items</span>
+        </div>
+        <p style="font-size:12px;color:var(--mu);margin-bottom:12px;">Tick off as you go.</p>
+        {% for ing in recipe.ingredients %}
+          <label class="check">
+            <input type="checkbox" style="accent-color:var(--ac);margin-top:2px;"/>
+            <span style="font-size:13.5px;color:var(--tx2);">{{ ing }}</span>
+          </label>
+        {% endfor %}
+      </div>
+
+      <!-- 4. Step navigator (FIX 3: interactive prev/next array navigation) -->
+      <div class="snav-wrap" id="stepNavigator">
+        <div class="snav-header">
+          <div class="sl" style="margin-bottom:0;">
+            Method &middot;
+            <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--mu);">
+              {{ recipe.steps|length }} steps
+            </span>
+          </div>
+          <!-- Step counter badge -->
+          <span style="font-size:12.5px;font-weight:600;color:var(--ac);" id="snavCounter">
+            Step 1 of {{ recipe.steps|length }}
+          </span>
+        </div>
+
+        <!-- Progress bar -->
+        <div class="snav-progress-bar">
+          <div class="snav-progress-fill" id="snavProgressFill" style="width:0%;"></div>
+        </div>
+
+        <!-- Current step display -->
+        <div style="display:flex;gap:13px;align-items:flex-start;min-height:80px;">
+          <div class="snav-step-num" id="snavStepNum">1</div>
+          <div class="snav-step-text" id="snavStepText"></div>
+        </div>
+
+        <!-- Dot indicators -->
+        <div class="snav-dots" id="snavDots"></div>
+
+        <!-- Prev / Next controls -->
+        <div class="snav-controls">
+          <button class="btn btn-g" id="snavPrevBtn" disabled style="font-size:13px;padding:9px 20px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M11 18L5 12L11 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Previous
+          </button>
+
+          <!-- View all steps toggle -->
+          <button class="btn btn-g btn-s" id="snavToggleAllBtn" style="font-size:12px;">
+            View all steps
+          </button>
+
+          <button class="btn btn-p" id="snavNextBtn" style="font-size:13px;padding:9px 20px;">
+            Next step
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 12H19M13 6L19 12L13 18" stroke="var(--acTx)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+
+        <!-- Expanded "all steps" view (hidden by default) -->
+        <div id="snavAllSteps" hidden style="margin-top:18px;border-top:1px solid var(--bd);padding-top:14px;">
+          {% for step in recipe.steps %}
+            <div class="step-row{% if not loop.last %} sep{% endif %}">
+              <div style="width:22px;height:22px;border-radius:7px;background:var(--acBg);border:1px solid var(--ac);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:700;color:var(--ac);margin-top:2px;">{{ loop.index }}</div>
+              <div style="font-size:13.5px;color:var(--tx2);line-height:1.65;">{{ step }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- 5. Tips & substitutions (FIX 3: metadata moved below steps) -->
+      {% if recipe.tips or recipe.substitutions %}
+      <div class="card" style="padding:20px;">
+        {% if recipe.tips %}
+          <div class="sl">Tips</div>
+          {% for t in recipe.tips %}
+            <div class="tip-row{% if not loop.last %} sep{% endif %}">
+              <span style="color:var(--ac);flex-shrink:0;font-weight:700;">&#10022;</span>{{ t }}
+            </div>
+          {% endfor %}
+        {% endif %}
+        {% if recipe.substitutions %}
+          <div class="sl" style="margin-top:16px;">Substitutions</div>
+          {% for s in recipe.substitutions %}
+            <div class="tip-row{% if not loop.last %} sep{% endif %}">
+              <span style="color:var(--ac);flex-shrink:0;font-weight:700;">&#8596;</span>{{ s }}
+            </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+      {% endif %}
+
+    </div><!-- /left column -->
+
+    <!-- RIGHT sidebar (FIX 3: metadata summary stays here) -->
+    <div style="display:flex;flex-direction:column;gap:13px;position:sticky;top:68px;">
+
+      <!-- Match score -->
+      {% if recipe.match_score is not none %}
+      <div class="card" style="padding:18px;border:1.5px solid var(--ac);background:var(--acBg);">
+        <div class="sl">Ingredient Match</div>
+        <div style="font-size:38px;font-family:'Instrument Serif',serif;color:var(--ac);line-height:1;letter-spacing:-.03em;">{{ recipe.match_score }}%</div>
+        <div class="mbar" style="margin-top:8px;height:4px;">
+          <div class="mbar-f" id="matchBar" data-pct="{{ recipe.match_score }}"></div>
+        </div>
+        <div style="font-size:12px;color:var(--mu);margin-top:6px;">Based on your selected ingredients</div>
+      </div>
+      {% endif %}
+
+      <!-- Quick info -->
+      <div class="card" style="padding:18px;">
+        <div class="sl">Quick Info</div>
+        <div class="info-row sep">
+          <span style="color:var(--mu);">Cooking time</span>
+          <span style="font-weight:600;color:var(--tx);">{{ recipe.cooking_time }}</span>
+        </div>
+        <div class="info-row sep">
+          <span style="color:var(--mu);">Difficulty</span>
+          <span style="font-weight:600;color:var(--tx);">{{ recipe.difficulty }}</span>
+        </div>
+        <div class="info-row">
+          <span style="color:var(--mu);">Servings</span>
+          <span style="font-weight:600;color:var(--tx);">{{ recipe.servings }}</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div><!-- /page -->
+
+<!-- ========== COOKING MODE OVERLAY ========== -->
+<div id="cookingMode" class="ckw">
+  <div class="cktop">
+    <button class="ckbtn ckbtn-g" style="font-size:12.5px;padding:7px 14px;" id="exitCookingBtn">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M11 18L5 12L11 6" stroke="rgba(255,255,255,.55)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Exit
+    </button>
+    <div style="flex:1;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:7px;">
+        <span style="font-size:12.5px;color:rgba(255,255,255,.35);">{{ recipe.title }}</span>
+        <span style="font-size:13px;font-family:'Instrument Serif',serif;color:var(--ac);">
+          <span id="ckStepNum">1</span><span style="color:rgba(255,255,255,.22);font-family:'Geist',sans-serif;font-size:12px;"> / {{ recipe.steps|length }}</span>
+        </span>
+      </div>
+      <div class="prog" style="background:rgba(255,255,255,.05);">
+        <div class="prog-f" id="ckProgress" style="width:0%;"></div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+      <button class="vbtn" id="voiceBtn" title="Toggle voice">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="9" y="2" width="6" height="11" rx="3" stroke="rgba(255,255,255,.5)" stroke-width="1.6"/><path d="M5 11a7 7 0 0 0 14 0" stroke="rgba(255,255,255,.5)" stroke-width="1.6" stroke-linecap="round"/><line x1="12" y1="18" x2="12" y2="22" stroke="rgba(255,255,255,.5)" stroke-width="1.6" stroke-linecap="round"/><line x1="9" y1="22" x2="15" y2="22" stroke="rgba(255,255,255,.5)" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+      <span id="voiceLabel" style="font-size:9.5px;color:rgba(255,255,255,.22);letter-spacing:.05em;text-transform:uppercase;">Voice off</span>
+    </div>
+  </div>
+  <div class="ckbody">
+    <div class="ckmain">
+      <div class="ckbig" id="ckBigNum">01</div>
+      <div class="cktxt" id="ckStepText"></div>
+      <div class="cknav">
+        <button class="ckbtn ckbtn-g" id="ckPrevBtn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M11 18L5 12L11 6" stroke="rgba(255,255,255,.55)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Back
+        </button>
+        <button class="ckbtn ckbtn-a" id="ckNextBtn" style="padding:11px 26px;">
+          Next
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M5 12H19M13 6L19 12L13 18" stroke="var(--acTx)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+      <div id="ckDots" style="display:flex;gap:6px;margin-top:26px;"></div>
+    </div>
+    <div class="ckside">
+      <div style="font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.18);margin-bottom:9px;">Steps</div>
+      <div id="ckSideSteps"></div>
+      <div style="margin-top:16px;padding:12px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:10px;">
+        <div style="font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.18);margin-bottom:8px;">Ingredients</div>
+        {% for ing in recipe.ingredients %}
+          <div style="display:flex;gap:6px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.03);font-size:11.5px;color:rgba(255,255,255,.35);">
+            <div style="width:3px;height:3px;border-radius:50%;background:var(--ac);flex-shrink:0;margin-top:5px;"></div>{{ ing }}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  <div id="ckFinished" hidden style="position:absolute;inset:0;z-index:10;background:rgba(0,0,0,.92);flex-direction:column;align-items:center;justify-content:center;animation:fi .3s ease;">
+    <div style="font-size:60px;animation:flt 2s ease-in-out infinite;">&#127881;</div>
+    <div style="font-family:'Instrument Serif',serif;font-size:32px;font-weight:400;color:#fff;margin-top:16px;letter-spacing:-.02em;">All done!</div>
+    <div style="color:rgba(255,255,255,.4);font-size:14px;margin-top:6px;">Enjoy your {{ recipe.title }}</div>
+  </div>
+</div>
+
+<!-- Data passed to JS -->
+<script type="application/json" id="recipeData">{{ recipe|tojson }}</script>
+<script type="application/json" id="modeData">{{ mode|tojson }}</script>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  var recipe = JSON.parse(document.getElementById('recipeData').textContent);
+  var mode   = JSON.parse(document.getElementById('modeData').textContent);
+  window.__RECIPE__ = recipe;
+  window.__MODE__   = mode;
+
+  // Set match bar width
+  var matchBar = document.getElementById('matchBar');
+  if (matchBar) { matchBar.style.width = (matchBar.dataset.pct || '0') + '%'; }
+
+  // ── Hero image polling (unchanged) ───────────────────────────────────────
+  (function() {
+    var heroImg = document.getElementById('heroImg');
+    if (!heroImg) return;
+    var currentSrc = heroImg.getAttribute('src') || '';
+    if (currentSrc.indexOf('data:') === 0) return;
+    var recipeId = recipe.id;
+    if (!recipeId) return;
+    var tries = 0, MAX = 30;
+    function poll() {
+      if (tries >= MAX) return;
+      tries++;
+      fetch('/api/recipes/image/' + encodeURIComponent(recipeId))
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          if (data && data.image) { heroImg.src = data.image; heroImg.dataset.fb = ''; }
+          else { setTimeout(poll, 1500); }
+        })
+        .catch(function() { setTimeout(poll, 1500); });
+    }
+    setTimeout(poll, 500);
+  })();
+
+  // ── FIX 3: Step navigator ────────────────────────────────────────────────
+  // Provides interactive prev/next navigation through recipe.steps array.
+  // State is fully in JS so the Jinja template stays clean.
+  (function() {
+    var steps = Array.isArray(recipe.steps) ? recipe.steps : [];
+    if (!steps.length) {
+      var nav = document.getElementById('stepNavigator');
+      if (nav) nav.style.display = 'none';
+      return;
+    }
+
+    var idx = 0;  // current step index (0-based)
+
+    var counterEl   = document.getElementById('snavCounter');
+    var numEl       = document.getElementById('snavStepNum');
+    var textEl      = document.getElementById('snavStepText');
+    var fillEl      = document.getElementById('snavProgressFill');
+    var dotsEl      = document.getElementById('snavDots');
+    var prevBtn     = document.getElementById('snavPrevBtn');
+    var nextBtn     = document.getElementById('snavNextBtn');
+    var toggleBtn   = document.getElementById('snavToggleAllBtn');
+    var allStepsEl  = document.getElementById('snavAllSteps');
+    var allExpanded = false;
+
+    function renderNav() {
+      // Counter
+      counterEl.textContent = 'Step ' + (idx + 1) + ' of ' + steps.length;
+      // Number badge
+      numEl.textContent = idx + 1;
+      // Step text
+      textEl.textContent = steps[idx] || '';
+      // Progress bar
+      var pct = Math.round(((idx + 1) / steps.length) * 100);
+      fillEl.style.width = pct + '%';
+
+      // Dots — max 12 shown (wider recipes would be cluttered)
+      dotsEl.innerHTML = '';
+      var maxDots = Math.min(steps.length, 12);
+      for (var i = 0; i < maxDots; i++) {
+        var dot = document.createElement('div');
+        dot.className = 'snav-dot' + (i === idx ? ' active' : (i < idx ? ' done' : ''));
+        dot.style.width = i === idx ? '20px' : '6px';
+        (function(pi) {
+          dot.addEventListener('click', function() { idx = pi; renderNav(); });
+        })(i);
+        dotsEl.appendChild(dot);
+      }
+      // If steps > 12, show "…" hint
+      if (steps.length > 12) {
+        var more = document.createElement('span');
+        more.style.cssText = 'font-size:11px;color:var(--mu);align-self:center;';
+        more.textContent = '+' + (steps.length - 12) + ' more';
+        dotsEl.appendChild(more);
+      }
+
+      // Prev/Next button states
+      prevBtn.disabled = idx === 0;
+      if (idx >= steps.length - 1) {
+        nextBtn.textContent = '';
+        nextBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 12.5L9.5 18L20 7" stroke="var(--acTx)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Finish';
+        nextBtn.className = 'btn btn-p';
+        nextBtn.style.padding = '9px 20px';
+      } else {
+        nextBtn.innerHTML = 'Next step <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 12H19M13 6L19 12L13 18" stroke="var(--acTx)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        nextBtn.className = 'btn btn-p';
+        nextBtn.style.padding = '9px 20px';
+      }
+    }
+
+    prevBtn.addEventListener('click', function() {
+      if (idx > 0) { idx--; renderNav(); }
+    });
+
+    nextBtn.addEventListener('click', function() {
+      if (idx < steps.length - 1) {
+        idx++;
+        renderNav();
+        // Scroll navigator into view on mobile
+        document.getElementById('stepNavigator').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } else {
+        // Last step — show a brief "done" toast
+        if (typeof toast === 'function') toast('All steps complete! Enjoy your meal 🎉', 'success');
+      }
+    });
+
+    // Toggle "view all steps" panel
+    toggleBtn.addEventListener('click', function() {
+      allExpanded = !allExpanded;
+      if (allExpanded) {
+        allStepsEl.removeAttribute('hidden');
+        toggleBtn.textContent = 'Hide all steps';
+      } else {
+        allStepsEl.setAttribute('hidden', '');
+        toggleBtn.textContent = 'View all steps';
+      }
+    });
+
+    // Initial render
+    renderNav();
+  })();
+
+  // ── Favourites (unchanged) ───────────────────────────────────────────────
+  document.getElementById('favBtn').addEventListener('click', function() {
+    apiJson('/api/favorites', { method: 'POST', body: { recipe: recipe } })
+      .then(function() {
+        document.getElementById('favBtnLabel').textContent = 'Saved';
+        document.getElementById('favIconHeart').innerHTML = '<path d="M12 21C12 21 3.5 15.5 3.5 9A4.5 4.5 0 0 1 12 6.76 4.5 4.5 0 0 1 20.5 9C20.5 15.5 12 21 12 21Z" fill="#F06060" stroke="#F06060" stroke-width="1.6" stroke-linejoin="round"/>';
+        toast('Saved to favourites', 'success');
+      })
+      .catch(function(e) { toast(e.message, 'error'); });
+  });
+
+  // ── Cooking Mode (unchanged logic) ──────────────────────────────────────
+  var steps  = Array.isArray(recipe.steps) ? recipe.steps : [];
+  var ckMode = document.getElementById('cookingMode');
+  var idx = 0;
+  var recognizing = false;
+  var rec = null;
+
+  function ckRender() {
+    document.getElementById('ckStepNum').textContent  = String(idx + 1);
+    document.getElementById('ckBigNum').textContent   = idx < 9 ? ('0' + (idx + 1)) : String(idx + 1);
+    document.getElementById('ckStepText').textContent = steps[idx] || '';
+    var pct = steps.length ? Math.round(((idx + 1) / steps.length) * 100) : 0;
+    document.getElementById('ckProgress').style.width = pct + '%';
+    document.getElementById('ckPrevBtn').disabled = idx === 0;
+
+    var nextBtn = document.getElementById('ckNextBtn');
+    if (idx >= steps.length - 1) {
+      nextBtn.className = 'ckbtn ckbtn-dn';
+      nextBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 12.5L9.5 18L20 7" stroke="var(--ac)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Finish';
+    } else {
+      nextBtn.className = 'ckbtn ckbtn-a';
+      nextBtn.style.padding = '11px 26px';
+      nextBtn.innerHTML = 'Next <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M5 12H19M13 6L19 12L13 18" stroke="var(--acTx)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    }
+
+    var dots = document.getElementById('ckDots');
+    dots.innerHTML = '';
+    steps.forEach(function(_, i) {
+      var d = document.createElement('div');
+      d.style.cssText = 'border-radius:99px;border:none;cursor:pointer;transition:all .25s;height:6px;'
+        + 'width:' + (i === idx ? 20 : 6) + 'px;'
+        + 'background:' + (i <= idx ? 'var(--ac)' : 'rgba(255,255,255,.1)') + ';'
+        + 'opacity:' + (i === idx ? 1 : (i < idx ? 0.6 : 0.3)) + ';';
+      (function(pi) { d.addEventListener('click', function() { idx = pi; ckRender(); }); })(i);
+      dots.appendChild(d);
+    });
+
+    var side = document.getElementById('ckSideSteps');
+    side.innerHTML = '';
+    steps.forEach(function(s, i) {
+      var el = document.createElement('div');
+      el.className = 'spill' + (i === idx ? ' spa' : '') + (i < idx ? ' spd' : '');
+      var numHtml = i < idx
+        ? '<svg width="8" height="8" viewBox="0 0 24 24" fill="none"><path d="M4 12.5L9.5 18L20 7" stroke="rgba(255,255,255,.5)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        : String(i + 1);
+      el.innerHTML = '<div class="spn">' + numHtml + '</div>'
+        + '<div style="font-size:11.5px;line-height:1.5;">' + s.slice(0, 55) + '\u2026</div>';
+      (function(pi) { el.addEventListener('click', function() { idx = pi; ckRender(); }); })(i);
+      side.appendChild(el);
+    });
+  }
+
+  function ckNext() {
+    if (idx >= steps.length - 1) {
+      var fin = document.getElementById('ckFinished');
+      fin.removeAttribute('hidden');
+      fin.style.display = 'flex';
+      fin.style.flexDirection = 'column';
+      setTimeout(function() {
+        ckMode.classList.remove('open');
+        fin.setAttribute('hidden', '');
+        fin.style.display = '';
+      }, 2800);
+    } else { idx++; ckRender(); }
+  }
+  function ckPrev() { if (idx > 0) { idx--; ckRender(); } }
+
+  document.getElementById('ckNextBtn').addEventListener('click', ckNext);
+  document.getElementById('ckPrevBtn').addEventListener('click', ckPrev);
+  document.getElementById('exitCookingBtn').addEventListener('click', function() {
+    ckMode.classList.remove('open');
+    if (rec) { try { rec.stop(); } catch(e) {} }
+    recognizing = false;
+  });
+  document.getElementById('startCookingBtn').addEventListener('click', function() {
+    idx = 0; ckRender(); ckMode.classList.add('open');
+  });
+
+  function initVoice() {
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return null;
+    var r = new SR();
+    r.continuous = true; r.interimResults = false; r.lang = 'en-US';
+    r.onresult = function(evt) {
+      var tr = String(evt.results[evt.results.length - 1][0].transcript || '').toLowerCase();
+      if (tr.indexOf('next') !== -1) ckNext();
+      else if (tr.indexOf('back') !== -1 || tr.indexOf('go back') !== -1) ckPrev();
+      else if (tr.indexOf('repeat') !== -1) ckRender();
+    };
+    r.onend = function() { if (recognizing) { try { r.start(); } catch(e) {} } };
+    return r;
+  }
+
+  document.getElementById('voiceBtn').addEventListener('click', function() {
+    if (!rec) rec = initVoice();
+    if (!rec) { toast('Voice not supported in this browser', 'error'); return; }
+    recognizing = !recognizing;
+    var btn = document.getElementById('voiceBtn');
+    var lbl = document.getElementById('voiceLabel');
+    if (recognizing) {
+      try { rec.start(); } catch(e) {}
+      btn.classList.add('von');
+      lbl.textContent = 'Listening\u2026';
+      toast("Voice enabled: say 'Next' or 'Back'", 'success');
+    } else {
+      try { rec.stop(); } catch(e) {}
+      btn.classList.remove('von');
+      lbl.textContent = 'Voice off';
+      toast('Voice disabled', 'success');
+    }
+  });
+
+  if (mode === 'cooking') { idx = 0; ckRender(); ckMode.classList.add('open'); }
+})();
+</script>
+
+<!-- AI Chef FAB (unchanged markup) -->
+<button class="cfab" id="chefFab" aria-label="AI Chef" title="AI Chef">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--ac)" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 14H18V19.5C18 20.33 17.33 21 16.5 21H7.5C6.67 21 6 20.33 6 19.5V14Z"/>
+    <path d="M8 14V11.5C6.34 11.5 5 10.16 5 8.5C5 6.84 6.34 5.5 8 5.5C8.35 5.5 8.69 5.56 9 5.66C9.46 4.1 10.88 3 12.5 3C14.43 3 16 4.57 16 6.5C17.1 6.5 18 7.4 18 8.5C18 9.6 17.1 10.5 16 10.5V14"/>
+  </svg>
+  <div class="cdot"></div>
+</button>
+<div class="cpan" id="chefPanel">
+  <div class="chd">
+    <div style="width:32px;height:32px;border-radius:9px;background:var(--acBg);border:1px solid var(--ac);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ac)" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 14H18V19.5C18 20.33 17.33 21 16.5 21H7.5C6.67 21 6 20.33 6 19.5V14Z"/>
+        <path d="M8 14V11.5C6.34 11.5 5 10.16 5 8.5C5 6.84 6.34 5.5 8 5.5C8.35 5.5 8.69 5.56 9 5.66C9.46 4.1 10.88 3 12.5 3C14.43 3 16 4.57 16 6.5C17.1 6.5 18 7.4 18 8.5C18 9.6 17.1 10.5 16 10.5V14"/>
+      </svg>
+    </div>
+    <div>
+      <div style="font-weight:600;font-size:13px;">AI Chef</div>
+      <div style="font-size:11px;color:var(--mu);margin-top:1px;">Recipe assistant &middot; Groq</div>
+    </div>
+    <button class="btic" style="margin-left:auto;width:26px;height:26px;" id="closePanelBtn">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <div class="cmsgs" id="fabChatMsgs"></div>
+  <div class="csugs">
+    <button class="csug" id="fabSug1">Sub butter?</button>
+    <button class="csug" id="fabSug2">When done?</button>
+    <button class="csug" id="fabSug3">Best sauce?</button>
+  </div>
+  <div class="cft">
+    <input class="inp" id="fabChatInput" style="font-size:12.5px;" placeholder="Ask anything&hellip;"/>
+    <button class="btn btn-p" id="fabSendBtn" style="padding:8px 12px;flex-shrink:0;border-radius:8px;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13" stroke="var(--acTx)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="var(--acTx)" stroke-width="1.8" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+</div>
+
+<script>
+(function() {
+  var panel  = document.getElementById('chefPanel');
+  var msgs   = document.getElementById('fabChatMsgs');
+  var input  = document.getElementById('fabChatInput');
+  var recipe = window.__RECIPE__;
+  var isSending = false;
+
+  document.getElementById('chefFab').addEventListener('click', function() { panel.classList.toggle('open'); });
+  document.getElementById('closePanelBtn').addEventListener('click', function() { panel.classList.remove('open'); });
+
+  function addFabMsg(text, role) {
+    var m = document.createElement('div');
+    m.className = 'cmsg ' + (role === 'ai' ? 'ai' : 'usr');
+    m.textContent = text;
+    msgs.appendChild(m);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  /* FIX 4: fabSend now includes a loading state and validates the response
+     shape before rendering. The recipe is always sent as part of the payload
+     so the backend can provide context-aware answers. */
+  function fabSend(preset) {
+    if (isSending) return;
+    var txt = preset || (input.value || '').trim();
+    if (!txt) return;
+
+    isSending = true;
+    addFabMsg(txt, 'user');
+    input.value = '';
+    input.disabled = true;
+
+    // Optimistic typing indicator
+    var typingEl = document.createElement('div');
+    typingEl.className = 'cmsg ai';
+    typingEl.style.cssText = 'color:var(--mu);font-style:italic;';
+    typingEl.textContent = 'Chef is thinking\u2026';
+    msgs.appendChild(typingEl);
+    msgs.scrollTop = msgs.scrollHeight;
+
+    apiJson('/api/chat-recipe', {
+      method: 'POST',
+      body: {
+        recipe: recipe,   /* FIX 4: always include recipe context */
+        message: txt
+      }
+    })
+    .then(function(data) {
+      typingEl.remove();
+      var answer = (data && data.answer) ? data.answer : '\u2014';
+      addFabMsg(answer, 'ai');
+
+      /* Render suggested follow-up questions as quick-reply chips */
+      var sugs = Array.isArray(data && data.suggested_questions) ? data.suggested_questions : [];
+      var sugBar = document.getElementById('fabSugDynamic');
+      if (!sugBar) {
+        sugBar = document.createElement('div');
+        sugBar.id = 'fabSugDynamic';
+        sugBar.style.cssText = 'padding:4px 12px 2px;display:flex;gap:5px;flex-wrap:wrap;border-top:1px solid var(--bd);';
+        panel.insertBefore(sugBar, document.querySelector('.cft'));
+      }
+      sugBar.innerHTML = '';
+      sugs.slice(0, 3).forEach(function(q) {
+        var b = document.createElement('button');
+        b.className = 'csug';
+        b.textContent = q;
+        b.addEventListener('click', function() { fabSend(q); });
+        sugBar.appendChild(b);
+      });
+    })
+    .catch(function(e) {
+      typingEl.remove();
+      addFabMsg('Sorry \u2014 ' + (e.message || 'something went wrong'), 'ai');
+    })
+    .finally(function() {
+      isSending = false;
+      input.disabled = false;
+      input.focus();
+    });
+  }
+
+  document.getElementById('fabSug1').addEventListener('click', function() { fabSend('Can I substitute butter?'); });
+  document.getElementById('fabSug2').addEventListener('click', function() { fabSend("How do I know it's done?"); });
+  document.getElementById('fabSug3').addEventListener('click', function() { fabSend('Best sauce to serve?'); });
+  document.getElementById('fabSendBtn').addEventListener('click', function() { fabSend(); });
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); fabSend(); }
+  });
+
+  addFabMsg('Hi \u2014 ask me anything about this recipe: substitutions, timing, or technique.', 'ai');
+})();
+</script>
+{% endblock %}

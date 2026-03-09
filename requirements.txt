@@ -1,0 +1,33 @@
+# ── Web framework 
+flask>=3.0,<4.0
+gunicorn>=21.2,<22.0
+
+# ── Database (SQLAlchemy + Flask extension) 
+flask-sqlalchemy>=3.1,<4.0
+
+# ── HTTP client (used by GroqService) 
+requests>=2.31,<3.0
+
+# ── Data validation (Pydantic v2)
+pydantic>=2.0,<3.0
+
+# ── Environment variables 
+python-dotenv>=1.0,<2.0
+
+# ── File uploads 
+werkzeug>=3.0,<4.0
+
+# ── Image handling (used by recipe_service for SD-Turbo output) 
+Pillow>=10.0,<11.0
+
+# fal.ai is used for image generation — no local ML deps needed
+
+Flask==3.1.0
+python-dotenv==1.0.1
+requests==2.32.3
+Flask-SQLAlchemy==3.1.1
+Flask-Migrate==4.0.7
+Flask-WTF==1.2.2
+Werkzeug==3.1.3
+pydantic==2.10.6
+urllib3==1.26.18

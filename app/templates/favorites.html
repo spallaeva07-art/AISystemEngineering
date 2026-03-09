@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page" id="favoritesPage">
+
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:20px;flex-wrap:wrap;gap:12px;animation:fu .38s ease;">
+    <div>
+      <h1 style="font-size:clamp(24px,3.5vw,34px);margin-bottom:4px;">Favourites</h1>
+      <p style="color:var(--mu);font-size:13.5px;">Your saved recipes, ready anytime.</p>
+    </div>
+
+    <div style="display:flex;gap:8px;">
+      <a href="{{ url_for('main.app_home') }}" class="btn btn-g" style="font-size:13px;">Generate</a>
+      <a href="{{ url_for('recipes.recipes_page') }}" class="btn btn-o" style="font-size:13px;">Recipe list</a>
+    </div>
+  </div>
+
+  {% if favorites %}
+  <div id="favoritesGrid" class="rgrid">
+    {% for f in favorites %}
+    <article class="rc" data-delay="{{ loop.index0 }}">
+
+      <div style="position:relative;overflow:hidden;">
+        <img
+          class="rc-img"
+          src="{{ f.image_url or f.image or '' }}"
+          alt="{{ f.title }}"
+          data-title="{{ f.title }}"
+          data-sig="{{ f.id }}"
+          onerror="handleFavImgErr(this)"
+        />
+
+        <div style="position:absolute;top:9px;left:9px;display:flex;gap:5px;">
+          {% if f.difficulty %}
+            <span class="bdg {% if f.difficulty == 'Easy' %}bdg-a{% else %}bdg-w{% endif %}">
+              {{ f.difficulty }}
+            </span>
+          {% endif %}
+
+          {% if f.match_score is not none %}
+            <span class="bdg bdg-n">{{ f.match_score }}%</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div style="padding:15px;">
+        <h3 style="font-size:14.5px;font-family:'Instrument Serif',serif;line-height:1.22;margin-bottom:5px;font-weight:400;">
+          {{ f.title }}
+        </h3>
+
+        {% if f.description %}
+        <p style="font-size:12px;color:var(--tx2);line-height:1.6;margin-bottom:12px;">
+          {{ f.description }}
+        </p>
+        {% endif %}
+
+        <div style="display:flex;gap:11px;font-size:12px;color:var(--mu);margin-bottom:13px;">
+          {% if f.cooking_time %}
+          <span>&#9201; {{ f.cooking_time }}</span>
+          {% endif %}
+
+          {% if f.servings %}
+          <span>&#127869; {{ f.servings }} serves</span>
+          {% endif %}
+        </div>
+
+        <div style="display:flex;gap:6px;">
+          <a class="btn btn-p"
+             href="/recipe/{{ f.id|urlencode }}"
+             style="flex:1;font-size:12.5px;border-radius:8px;">
+             Open
+          </a>
+
+          <button
+            class="btn btn-o"
+            style="font-size:12.5px;border-radius:8px;"
+            data-fav-remove="{{ f.id }}">
+            Remove
+          </button>
+        </div>
+
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+
+  {% else %}
+
+  <!-- Empty state -->
+  <div id="favEmptyState"
+       class="card"
+       style="padding:64px 24px;text-align:center;animation:si .38s ease;">
+
+    <div style="width:60px;height:60px;border-radius:50%;background:var(--sur2);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path d="M12 21C12 21 3.5 15.5 3.5 9A4.5 4.5 0 0 1 12 6.76 4.5 4.5 0 0 1 20.5 9C20.5 15.5 12 21 12 21Z"
+              stroke="var(--mu)"
+              stroke-width="1.6"
+              stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <h2 style="font-size:20px;margin-bottom:8px;font-weight:400;">
+      Nothing saved yet
+    </h2>
+
+    <p style="color:var(--mu);font-size:13.5px;margin-bottom:24px;max-width:300px;margin-left:auto;margin-right:auto;line-height:1.7;">
+      Tap the heart on any recipe card to save it here.
+    </p>
+
+    <a class="btn btn-p"
+       href="{{ url_for('recipes.recipes_page') }}"
+       style="font-size:13.5px;padding:10px 26px;">
+       Browse Recipes
+    </a>
+
+  </div>
+
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+
+function handleFavImgErr(img) {
+  if (!img.dataset.fb) {
+    img.dataset.fb = '1'
+    img.src = 'https://source.unsplash.com/900x700/?food&sig=' + img.dataset.sig + '-fb&t=' + Date.now()
+  }
+}
+
+(function(){
+
+  // animation delay
+  var cards = document.querySelectorAll('.rc[data-delay]')
+  for (var i = 0; i < cards.length; i++) {
+    cards[i].style.animationDelay = (parseInt(cards[i].dataset.delay) * 0.045) + 's'
+  }
+
+  var grid = document.getElementById('favoritesGrid')
+  if (!grid) return
+
+  grid.addEventListener('click', function(e){
+
+    var btn = e.target.closest('[data-fav-remove]')
+    if (!btn) return
+    if (btn.disabled) return
+
+    var id = btn.dataset.favRemove
+    var card = btn.closest('article')
+
+    if (!id) {
+      console.warn('data-fav-remove empty')
+      return
+    }
+
+    btn.disabled = true
+    btn.textContent = 'Removing…'
+
+    fetch('/api/favorites/' + encodeURIComponent(id), {
+      method: 'DELETE',
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json' }
+    })
+
+    .then(function(res){
+      return res.json().catch(function(){ return {} }).then(function(data){
+        if (!res.ok) {
+          throw new Error(data.error || ('request_failed_' + res.status))
+        }
+        return data
+      })
+    })
+
+    .then(function(){
+
+      if (card) {
+        card.style.transition = 'opacity .2s, transform .2s'
+        card.style.opacity = '0'
+        card.style.transform = 'scale(.95)'
+
+        setTimeout(function(){
+
+          card.remove()
+
+          if (!grid.querySelector('article')) {
+            grid.style.display = 'none'
+            var emptyState = document.getElementById('favEmptyState')
+            if (emptyState) emptyState.style.display = ''
+          }
+
+        }, 220)
+      }
+
+      if (typeof toast === 'function') {
+        toast('Removed from favourites','success')
+      }
+
+    })
+
+    .catch(function(err){
+
+      btn.disabled = false
+      btn.textContent = 'Remove'
+
+      if (typeof toast === 'function') {
+        toast(err.message || 'Could not remove recipe','error')
+      } else {
+        alert(err.message || 'Could not remove recipe')
+      }
+
+    })
+
+  })
+
+  // image polling
+  var imgEls = grid.querySelectorAll('img[data-sig]')
+
+  imgEls.forEach(function(imgEl){
+
+    var src = imgEl.getAttribute('src') || ''
+    if (src.startsWith('data:')) return
+
+    var recipeId = imgEl.dataset.sig
+    if (!recipeId) return
+
+    var tries = 0
+    var MAX = 30
+
+    function poll(){
+
+      if (tries >= MAX) return
+      tries++
+
+      fetch('/api/recipes/image/' + encodeURIComponent(recipeId))
+
+      .then(function(r){ return r.json() })
+
+      .then(function(data){
+
+        if (data && data.image) {
+          imgEl.src = data.image
+          imgEl.dataset.fb = ''
+        } else {
+          setTimeout(poll,1500)
+        }
+
+      })
+
+      .catch(function(){
+        setTimeout(poll,1500)
+      })
+
+    }
+
+    setTimeout(poll,800)
+
+  })
+
+})()
+
+</script>
+{% endblock %}

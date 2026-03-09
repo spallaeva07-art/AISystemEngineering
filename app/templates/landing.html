@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page">
+  <div style="animation: fu .38s ease;">
+
+    <!-- Hero -->
+    <div style="max-width:580px; margin-bottom:40px;">
+      <div style="display:inline-flex;align-items:center;gap:8px;padding:5px 13px;border-radius:99px;border:1px solid var(--bd);background:var(--sur);font-size:12.5px;color:var(--tx2);margin-bottom:18px;">
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--ac);display:inline-block;"></span>
+        AI-powered, leftover-first recipes
+      </div>
+      <h1 style="font-size:clamp(28px,5vw,46px);line-height:1.1;letter-spacing:-.03em;margin-bottom:14px;">
+        Turn fridge leftovers into <em style="color:var(--ac);">something great</em>
+      </h1>
+      <p style="font-size:15px;color:var(--mu);line-height:1.75;margin-bottom:28px;max-width:480px;">
+        Scan a fridge photo, combine with your pantry, and get real recipes with guided cooking mode, voice control, and an AI chef on call.
+      </p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a href="{{ url_for('main.app_home') }}" class="btn btn-p" style="font-size:14px;padding:11px 28px;">Start Cooking</a>
+        <!--<a href="{{ url_for('recipes.recipes_page') }}" class="btn btn-o" style="font-size:14px;padding:11px 22px;">View Recipes</a>-->
+      </div>
+    </div>
+
+    <!-- Feature grid -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;max-width:920px;">
+
+      <div class="feature-card">
+        <div class="feature-icon" style="background:var(--acBg);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M2 9.5A2 2 0 0 1 4 7.5H5.5L7.5 5H16.5L18.5 7.5H20A2 2 0 0 1 22 9.5V19A2 2 0 0 1 20 21H4A2 2 0 0 1 2 19V9.5Z" stroke="var(--ac)" stroke-width="1.6" stroke-linejoin="round"/>
+            <circle cx="12" cy="13.5" r="3.5" stroke="var(--ac)" stroke-width="1.6"/>
+          </svg>
+        </div>
+        <div>
+          <div style="font-weight:600;font-size:13.5px;margin-bottom:3px;">Scan ingredients</div>
+          <div style="font-size:12px;color:var(--mu);line-height:1.6;">Upload a photo of your fridge or ingredients and instantly detect what you have available.
+          </div>
+        </div>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon" style="background:rgba(249,115,22,0.1);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M13 2L4.5 13.5H12L11 22L19.5 10.5H12L13 2Z" stroke="#EA580C" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div>
+          <div style="font-weight:600;font-size:13.5px;margin-bottom:3px;">Generate instantly</div>
+          <div style="font-size:12px;color:var(--mu);line-height:1.6;">Get recipe ideas in seconds with match scores and difficulty levels tailored to your ingredients.</div>
+        </div>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon" style="background:var(--sur2);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M4 7h16M4 12h16M4 17h10" stroke="var(--mu)" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div>
+          <div style="font-weight:600;font-size:13.5px;margin-bottom:3px;">Smart Pantry</div>
+          <div style="font-size:12px;color:var(--mu);line-height:1.6;">Save your staple ingredients once and reuse them whenever you generate new recipes.
+          </div>
+        </div>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon" style="background:var(--sur2);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M12 21C12 21 3.5 15.5 3.5 9A4.5 4.5 0 0 1 12 6.76 4.5 4.5 0 0 1 20.5 9C20.5 15.5 12 21 12 21Z" stroke="var(--mu)" stroke-width="1.6" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div>
+          <div style="font-weight:600;font-size:13.5px;margin-bottom:3px;">Favourites</div>
+          <div style="font-size:12px;color:var(--mu);line-height:1.6;">Keep the recipes you love in one place and access them anytime.</div>
+        </div>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon" style="background:var(--sur2);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mu)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 4h16v12H5.5L4 18V4Z"/>
+            <path d="M7 8h10M7 11h7"/>
+          </svg>
+        </div>
+        <div>
+          <div style="font-weight:600;font-size:13.5px;margin-bottom:3px;">AI Cooking Assistant</div>
+          <div style="font-size:12px;color:var(--mu);line-height:1.6;">AAsk questions about substitutions, cooking times, or techniques while preparing your dish.</div>
+        </div>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon" style="background:var(--sur2);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M12 6v6l4 2" stroke="var(--mu)" stroke-width="1.6" stroke-linecap="round"/>
+            <path d="M21 12a9 9 0 1 1-9-9" stroke="var(--mu)" stroke-width="1.6"/>
+          </svg>
+        </div>
+        <div>
+          <div style="font-weight:600;font-size:13.5px;margin-bottom:3px;">Cooking Mode</div>
+          <div style="font-size:12px;color:var(--mu);line-height:1.6;">Follow step-by-step instructions in a clean, distraction-free view with optional voice guidance.</div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+{% endblock %}
