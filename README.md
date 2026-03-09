@@ -3,7 +3,7 @@
 
 FreshChef is a Flask web app that turns whatever's left in your fridge into actual meals. Snap a photo of your ingredients, type a few things in, or pull from your saved pantry — and the app figures out what you can cook. The idea came from a simple frustration: opening the fridge, having no idea what to make, and ending up ordering takeout instead.
 
----
+
 
 ## What it does
 
@@ -23,7 +23,7 @@ FreshChef is a Flask web app that turns whatever's left in your fridge into actu
 
 **AI Chef chat** — On any recipe page, you can open a chat with an AI assistant that knows the recipe you're looking at. Useful for things like "can I substitute the cream?" or "how do I know when it's done?"
 
----
+
 
 ## Getting started
 
@@ -53,7 +53,7 @@ python run.py
 
 Open [http://localhost:5051](http://localhost:5051) in your browser.
 
----
+
 
 ### Docker
 
@@ -64,7 +64,7 @@ docker-compose up --build
 
 The app runs on port `5051`.
 
----
+
 
 ## Project layout
 
@@ -80,7 +80,7 @@ app/
   static/            # CSS and JavaScript
 ```
 
----
+
 
 ## API reference
 
@@ -112,7 +112,7 @@ curl -X POST http://localhost:5051/api/generate-recipes \
 
 `mode` can be `manual`, `fridge`, `pantry`, or `pantry+fridge`.
 
----
+
 
 ## Under the hood
 
@@ -122,7 +122,7 @@ Images are fetched from [Pexels](https://www.pexels.com) using the recipe title 
 
 Everything is stored in SQLite — pantry items, favorites, and uploaded images. The database file lives in a Docker volume so it persists across rebuilds.
 
----
+
 
 ## What's next
 
