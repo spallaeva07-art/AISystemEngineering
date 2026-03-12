@@ -17,10 +17,8 @@ python-dotenv>=1.0,<2.0
 # ── File uploads 
 werkzeug>=3.0,<4.0
 
-# ── Image handling (used by recipe_service for SD-Turbo output) 
 Pillow>=10.0,<11.0
 
-# fal.ai is used for image generation — no local ML deps needed
 
 Flask==3.1.0
 python-dotenv==1.0.1
